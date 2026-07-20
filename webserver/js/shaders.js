@@ -53,7 +53,7 @@ export const slider_fragmentShaderSource = `#version 300 es
     vec2 pixelCoord = (uv * 0.5 + 0.5) * iResolution;
     vec2 position = pixelCoord / iResolution.y;
 
-    float dist = sdBox(position - vec2(iResolution.x / iResolution.y * 0.5, 0.1), vec2(iResolution.x / iResolution.y * 0.4, 0.01));
+    float dist = sdBox(position - vec2(iResolution.x / iResolution.y * 0.5, 0.05), vec2(iResolution.x / iResolution.y * 0.45, 0.01));
     // draw slider bar
     if (dist <0.0){
       fragColor = vec4(-uv.x, uv.y, 0.0, 1.0);
@@ -61,7 +61,7 @@ export const slider_fragmentShaderSource = `#version 300 es
       fragColor = vec4(0.0, 0.0, 0.0, 0.0);
     }
 
-    float ball = sdfCircle(position-vec2(0.0,-0.9), 0.02);
+    float ball = sdfCircle(position-vec2(iResolution.x / iResolution.y * 0.5, 0.05), 0.02);
     if (ball <0.0){
       fragColor = vec4(1.0, uv.y, 0.0, 1.0);
     } else{
