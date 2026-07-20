@@ -7,10 +7,11 @@ export class Renderer {
     this.nodesToDraw = [];
     this.projectionMatrix = glMatrix.mat4.create();
     this.aspectRatio = 1.0;
-    this.iResolution = [1, 1]; // Initialize with default values
+    this.iResolution = [1, 1];
     this.viewMatrix = glMatrix.mat4.create();
     glMatrix.mat4.translate( this.viewMatrix,  this.viewMatrix, [0,0,-3]);
-
+    this.orthoProjectionMatrix = glMatrix.mat4.create();
+    this.identityViewMatrix = glMatrix.mat4.create(); // identity
   }
 
   setProgram(program, uniforms) {
@@ -32,7 +33,6 @@ export class Renderer {
         0.1,                  // near clipping plane, e.g., 0.1
         100                    // far clipping plane, e.g., 100
     );
-    console.log(  this.projectionMatrix,);
 
 
     rootNode.traverse((node) => {
@@ -55,28 +55,34 @@ export class Renderer {
 
   }
 
-  // TODO each node has their program, eventually
   drawNode(node) {
 
     const gl = this.gl;
     gl.useProgram(node.program)
 
     const worldMatrix = node.getWorldMatrix();
-
     const mvpMatrix = glMatrix.mat4.create();
 
-    glMatrix.mat4.multiply(mvpMatrix, this.projectionMatrix, this.viewMatrix);
+    const is2D = node.is2D || false;
+    const projMatrix = is2D ? this.orthoProjectionMatrix : this.projectionMatrix;
+    const viewMatrix = is2D ? this.identityViewMatrix : this.viewMatrix;
+
+    glMatrix.mat4.multiply(mvpMatrix, projMatrix, viewMatrix);
     glMatrix.mat4.multiply(mvpMatrix, mvpMatrix, worldMatrix);
 
-    for (const [name, value] of Object.entries(this.uniforms)) {
-      const location = gl.getUniformLocation(node.program, name);
+    for (const uniform of node.uniforms) {
+      const location = gl.getUniformLocation(node.program, uniform.name);
+
       if (!location) continue;
 
+      const value = uniform.value;
+
       if (typeof value === 'function') {
-        const result = value(node);
+
         if (Array.isArray(result) && result.length === 16) {
           gl.uniformMatrix4fv(location, false, result);
         } else if (typeof result === 'number') {
+
           gl.uniform1f(location, result);
         } else if (Array.isArray(result)) {
           gl.uniform1fv(location, result);
@@ -91,6 +97,8 @@ export class Renderer {
         }
       }
     }
+
+
 
     const transformLocation = gl.getUniformLocation(node.program, "uMVP");
     if (transformLocation !== null && transformLocation !== -1) {
@@ -117,6 +125,11 @@ export class Renderer {
 
   setAspectRatio(aspectRatio) {
     this.aspectRatio = aspectRatio;
+    const left = -aspectRatio;
+    const right = aspectRatio;
+    const bottom = -1;
+    const top = 1;
+    glMatrix.mat4.ortho(this.orthoProjectionMatrix, left, right, bottom, top, -1, 1);
   }
   setIResolution(resolution) {
       this.iResolution = resolution;

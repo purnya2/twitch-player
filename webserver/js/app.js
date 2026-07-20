@@ -37,6 +37,7 @@ export class App {
        ]);
 
     const albumArt = new SceneNode(name);
+    albumArt.is2D = true;
     const vertexShader = compileShader(gl,vertexShaderSource, gl.VERTEX_SHADER);
     const fragmentShader = compileShader(gl,
       fragmentShaderSource,
@@ -51,8 +52,10 @@ export class App {
 
     albumArt.texture = createTexture(gl, './default_cover.png');;
     albumArt.setPosition(0, 0, 0);
-    albumArt.setScale(1.0, 1.0, 1.0);
-    albumArt.setRotation(0, 0, 0);
+    albumArt.setPositionPixel(10, 0, 0,this.canvas);
+
+    albumArt.setScalePixel(100.0, 100.0, 1.0,this.canvas);
+    albumArt.setRotation(0.0, 0, 0.0);
     return albumArt
   }
 
@@ -77,7 +80,11 @@ export class App {
     slider.program = createProgram(gl, vertexShader, fragmentShader);
     slider.mesh = createBufferInfo(gl, vertices, [
       { name: 'aPos', program: slider.program, size: 2, stride: 8, offset: 0, components: 2 }
+
     ]);
+    slider.uniforms = [
+      { name: 'uSeekProgress', program: slider.program, value: 0.0 }
+    ]
 
     /*slider.setPosition(0, 0, 0);
    */
@@ -96,7 +103,7 @@ export class App {
     this.root.addChild(albumArt);
     this.root.addChild(this.slider);
 
-    this.root.addChild(albumArt2)
+    //this.root.addChild(albumArt2)
     this.refAlbum2 = albumArt2;
     this.refAlbum = albumArt;
 
@@ -109,13 +116,22 @@ export class App {
 
   loop() {
     if (this.refAlbum) {
-      this.refAlbum2.setRotation(0, 0, this.i);
-      this.i += 0.01;
+      //this.refAlbum2.setRotation(0, 0, this.i);
       //this.refAlbum2.setPosition(Math.sin(this.i) * 0.5, Math.cos(this.i) * 0.5, 0);
-      this.refAlbum.setRotation(0, 0, -this.i);
+      //this.refAlbum.setRotation(0, 0, -this.i);
+      //this.refAlbum2.setScale(0.5, 0.5, 1.0)
+      let albumScalePixel = this.refAlbum.getScalePixel(this.canvas)
+      console.log(albumScalePixel);
+      this.refAlbum.setPositionPixel(this.canvas.width * 0.05 + albumScalePixel[0] / 2, 100, 0, this.canvas);
+      this.refAlbum.setScalePixel(albumScalePixel[0], albumScalePixel[1], 1.0,this.canvas);
 
-      this.refAlbum2.setScale(0.5, 0.5, 1.0)
+    }
 
+    if (this.slider) {
+      this.i += 0.01;
+
+      // just a test to see if the seekbar changes
+      this.slider.uniforms[0].value = (Math.sin(this.i )+ 1.0)/2;
     }
     this.renderer.setIResolution([ this.canvas.width, this.canvas.height])
     this.renderer.setAspectRatio(this.aspectRatio);

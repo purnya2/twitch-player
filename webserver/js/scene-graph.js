@@ -18,14 +18,12 @@ export class SceneNode {
     this.visible = true;
     this.program = null
     this.isTransparent = false;
+    this.uniforms = [];
   }
 
   getWorldMatrix() {
     if (this.dirty ) {
-      console.log(`🔄 Recalculating ${this.name}`);
-      console.log('  Position:', this.position);
-      console.log('  Rotation:', this.rotation);
-      console.log('  Scale:', this.scale);
+
 
       // Start with identity
       glMatrix.mat4.identity(this.localMatrix);
@@ -45,7 +43,6 @@ export class SceneNode {
         glMatrix.mat4.copy(this.worldMatrix, this.localMatrix);
       }
 
-      console.log('  Result:', Array.from(this.worldMatrix));
       this.dirty = false;
     }
     return this.worldMatrix;
@@ -75,10 +72,40 @@ export class SceneNode {
     this.position = [x, y,z];
     this.setDirty();
   }
+
+  setPositionPixel(x, y, z, canvas) {
+    let aspectRatio = canvas.width / canvas.height;
+    const ndcX = (x / canvas.width) * 2 - 1;
+    const ndcY = (y / canvas.height) * 2 - 1;
+
+    const worldX = ndcX * aspectRatio;
+    const worldY = ndcY;
+
+    this.position = [worldX, worldY, z || 0];
+    this.setDirty();
+  }
+
   setRotation(x, y = 0, z ) {
       this.rotation = [x, y, z];
       this.setDirty();
-    }
+  }
+
+  setScale(x, y,z) {
+    this.scale = [x, y,z];
+    this.setDirty();
+  }
+  setScalePixel(x, y, z, canvas) {
+    // Convert pixel size to world units
+    // 1 world unit = canvas.height/2 pixels (since NDC goes from -1 to 1)
+    const pixelsPerWorldUnit = canvas.height / 2;
+
+    const scaleX = x / pixelsPerWorldUnit;
+    const scaleY = y / pixelsPerWorldUnit;
+    const scaleZ = z || 1;
+
+    this.scale = [scaleX, scaleY, scaleZ];
+    this.setDirty();
+  }
   // Set rotation from Euler angles
     setRotationEuler(x, y, z) {
       glMatrix.quat.fromEuler(this.quaternion, x, y, z);
@@ -107,16 +134,22 @@ export class SceneNode {
       this.setDirty();
     }
 
-  setScale(x, y,z) {
-    this.scale = [x, y,z];
-    this.setDirty();
-  }
+
   setDirty() {
       this.dirty = true;
       // Propagate to all children
       for (const child of this.children) {
           child.setDirty();
       }
+  }
+
+  getScalePixel(canvas) {
+    const pixelsPerWorldUnit = canvas.height / 2;
+    return [
+      this.scale[0] * pixelsPerWorldUnit,
+      this.scale[1] * pixelsPerWorldUnit,
+      this.scale[2]
+    ];
   }
 
 

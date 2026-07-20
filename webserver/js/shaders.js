@@ -37,8 +37,10 @@ export const slider_fragmentShaderSource = `#version 300 es
   out vec4 fragColor;
   in vec2 uv;
   uniform vec2 iResolution;
+  uniform float uSeekProgress;
 
   float threshold = 5.0;
+
   float sdfCircle(vec2 p, float r){
     return length(p) -r;
   }
@@ -47,6 +49,13 @@ export const slider_fragmentShaderSource = `#version 300 es
   {
       vec2 d = abs(p)-b;
       return length(max(d,0.0)) + min(max(d.x,d.y),0.0);
+  }
+
+  vec2 seekCirclePosition(vec2 leftMargin,vec2 rightMargin, float t){
+
+
+    return leftMargin + t*(rightMargin-leftMargin);
+
   }
 
   void main() {
@@ -60,8 +69,16 @@ export const slider_fragmentShaderSource = `#version 300 es
     } else{
       fragColor = vec4(0.0, 0.0, 0.0, 0.0);
     }
+    // todo, find a way to have the circle have an input that goes from 0 to 1, and its restricted to the same positions as the rectangle
+    // float ball = sdfCircle(position-vec2(iResolution.x / iResolution.y *0.5 , 0.05), 0.02);
+    //0.2*iResolution.x / iResolution.y
+    vec2 leftMargin = vec2(0.05*iResolution.x/iResolution.y,0.05);
+    vec2 rightMargin = vec2(iResolution.x / iResolution.y - 0.05*iResolution.x/iResolution.y,0.05);
 
-    float ball = sdfCircle(position-vec2(iResolution.x / iResolution.y * 0.5, 0.05), 0.02);
+
+    // im a genius
+    float ball = sdfCircle(position-seekCirclePosition(leftMargin,rightMargin,uSeekProgress), 0.02);
+
     if (ball <0.0){
       fragColor = vec4(1.0, uv.y, 0.0, 1.0);
     } else{
@@ -69,3 +86,8 @@ export const slider_fragmentShaderSource = `#version 300 es
 
   }
 `;
+// left margin =
+// f(t) = leftMargin + t(offset) dove leftmargin+offset = rightmargin
+// f(0) = leftMargin
+// f(1) = rightMargin
+//
