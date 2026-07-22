@@ -26,6 +26,7 @@ export class App {
     this.setupSSE();
 
     this.track_data = null;
+    this.likes = 0;
   }
   createAlbumArt(name) {
      const gl = this.gl;
@@ -119,28 +120,36 @@ export class App {
   setupSSE() {
     const eventSource = new EventSource('/sse');
     eventSource.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
+      try {
+        const data = JSON.parse(event.data);
 
-            // Update seekbar position
-            if (data.time_elapsed_millis !== undefined) {
-              //console.log(data)
-              this.track_data = {
-                  ...this.track_data,
-                  time_elapsed_millis: data.time_elapsed_millis
-              };
-              this.seekbarPos = data.time_elapsed_millis/ data.track_length_millis;
-            }
+        // Update seekbar position
+        if (data.time_elapsed_millis !== undefined) {
+          //console.log(data)
+          this.track_data = {
+            ...this.track_data,
+            time_elapsed_millis: data.time_elapsed_millis
+          };
+          this.seekbarPos = data.time_elapsed_millis / data.track_length_millis;
+        }
 
-            // Update track info if needed
-            if (data.track_name) {
-              //console.log('SSE data:', data);
-              this.track_data = {
-                  ...this.track_data,
-                  ...data
-              };
+        // Update track info if needed
+        if (data.hasOwnProperty("track_name")) {
+          //console.log('SSE data:', data);
+          this.track_data = {
+            ...this.track_data,
+            ...data
+          };
 
-            }
+        }
+        if (data.hasOwnProperty('likesAmount')) {
+          this.likes = data.likesAmount;
+          console.log(data);
+
+        }
+        if (data.time_elapsed_millis === undefined && !data.track_name) {
+        }
+
           } catch (e) {
             console.error('Failed to parse SSE data:', e);
           }
@@ -189,8 +198,8 @@ export class App {
             this.offsetTextScroll = 0;
           }
 
-          this.ctx.strokeText(td.track_name + " " + td.track_name, this.canvas.width * 0.05 + albumScalePixel[0]+10+this.offsetTextScroll, this.ctx.canvas.height - 100);
-          this.ctx.fillText(td.track_name + " " + td.track_name, this.canvas.width * 0.05 + albumScalePixel[0]+10+this.offsetTextScroll, this.ctx.canvas.height - 100);
+          this.ctx.strokeText(td.track_name + " " + td.track_name+  " " + td.track_name, this.canvas.width * 0.05 + albumScalePixel[0]+10+this.offsetTextScroll, this.ctx.canvas.height - 100);
+          this.ctx.fillText(td.track_name + " " + td.track_name + " " + td.track_name, this.canvas.width * 0.05 + albumScalePixel[0]+10+this.offsetTextScroll, this.ctx.canvas.height - 100);
           this.ctx.save();
           var gradient = this.ctx.createLinearGradient(this.canvas.width * 0.05 + albumScalePixel[0], 0, this.canvas.width,0 );
           gradient.addColorStop(0, "rgba(255, 255, 255, 1.0)");
@@ -250,8 +259,7 @@ export class App {
         this.ctx.lineWidth = 3;
         this.ctx.fillStyle = "#000000";
         let aspect =  this.canvas.height/ this.canvas.width;
-        console.log(aspect)
-        this.ctx.fillText("0", this.canvas.width * 0.925 , this.canvas.height-105.0);
+        this.ctx.fillText(this.likes, this.canvas.width * 0.925 , this.canvas.height-105.0);
         this.ctx.textAlign = "left";
 
       }

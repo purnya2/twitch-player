@@ -23,3 +23,8 @@ dotenvy = "0.15.7"
 rodio = "0.22.2"
 rand = "0.10.2"
 libc = "0.2.189"
+twitch-irc = { version ="6.1.1",features = ["refreshing-token-native-tls"]}
+sqlite = "0.37.0"
+async-trait = "0.1.91"
+reqwest = { version ="0.13.4",features = ["form"]}
+chrono = "0.4.45"

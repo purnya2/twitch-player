@@ -21,7 +21,10 @@ use std::io::Sink;
 use std::{default, env};
 use tokio::sync::{Mutex, broadcast, mpsc};
 use tokio_stream::{StreamExt as _, wrappers::ReceiverStream}; // Correct import
-use tower_http::{services::ServeDir, trace::TraceLayer}; // Use mpsc instead of broadcast // Add this import
+use tower_http::{services::ServeDir, trace::TraceLayer};
+
+use crate::MusicAuth; // Use mpsc instead of broadcast // Add this import
+
 pub struct MusicEventReceiver {
     event_rx: mpsc::Receiver<MusicEvent>,
 }
@@ -37,16 +40,16 @@ pub struct MusicServer {
 }
 
 impl MusicServer {
-    pub fn new() -> (Self, MusicEventReceiver, MusicCommandSender) {
+    pub fn new(music_auth: MusicAuth) -> (Self, MusicEventReceiver, MusicCommandSender) {
         dotenv().ok();
 
         let (event_tx, event_rx) = mpsc::channel(100);
         let (command_tx, command_rx) = mpsc::channel(100);
 
         // Read environment variables
-        let api_url = env::var("MUSIC_API_URL").expect("MUSIC_API_URL must be set");
-        let username = env::var("USERNAME").expect("USERNAME must be set");
-        let password = env::var("PASSWORD").expect("PASSWORD must be set");
+        let api_url = music_auth.api_url;
+        let username = music_auth.username;
+        let password = music_auth.password;
         let client_res = Client::new(&api_url, Auth::token(&username, &password));
         let music_server = Self {
             client: client_res.unwrap(),
@@ -97,8 +100,10 @@ impl MusicServer {
                 };
 
                 let event_tx = self.event_tx.clone();
+                let track_id = track.id.clone();
 
                 let update_track_event = MusicEvent::TrackInfo {
+                    track_id: track_id.clone(),
                     name: track.title,
                     album_name: track.album.unwrap(),
                     artist_name: track.artist.unwrap(),
@@ -108,10 +113,9 @@ impl MusicServer {
 
                 let _ = event_tx.send(update_track_event).await;
                 let command_rx = self.command_rx.clone();
+
                 let player = Player::connect_new(stream_handle.mixer());
                 player.append(source);
-
-                let track_id = track.id.clone();
 
                 let _ = tokio::spawn(async move {
                     let mut last_position = 0;
@@ -182,6 +186,7 @@ pub enum MusicEvent {
         time_elapsed_millis: u128,
     },
     TrackInfo {
+        track_id: String,
         name: String,
         album_name: String,
         artist_name: String,
