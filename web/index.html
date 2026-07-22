@@ -4,19 +4,34 @@
   <style>
     body {
       margin: 0;
-      background: transparent;
+      background-image: url("./bg.jpg");
       overflow: hidden;
+    }
+    .container {
+        position: relative;
     }
     canvas {
       display: block;
       width: 100vw;
       height: 100vh;
     }
+    #text {
+        position: absolute;
+        left: 0px;
+        top: 0px;
+        z-index: 10;
+    }
   </style>
 </head>
 <body>
-  <canvas id="c"></canvas>
+    <div class="container">
+        <canvas id="c"></canvas>
+        <canvas id="text" ></canvas>
+    </div>
   <script src="js/lib/gl-matrix-3.4.4/gl-matrix-min.js"></script>
   <script type="module" src="js/main.js"></script>
+  <script>
+
+  </script>
 </body>
 </html>

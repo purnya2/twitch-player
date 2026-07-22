@@ -49,7 +49,7 @@ export function createBufferInfo(gl, vertices, attributes) {
   return { vao, vertexCount };
 }
 // createTexture loads image asynchronously
-export function createTexture(gl, url, fallbackColor = [255, 0, 255, 255]) {
+export function createTexture(gl, url, fallbackColor = [0, 0, 0, 0]) {
   const texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
 

@@ -40,6 +40,18 @@ export const slider_fragmentShaderSource = `#version 300 es
   uniform float uSeekProgress;
 
   float threshold = 5.0;
+  float dot2(vec2 v) {
+      return dot(v, v);
+  }
+  float sdHeart(vec2 p )
+  {
+      p.x = abs(p.x);
+
+      if( p.y+p.x>1.0 )
+          return sqrt(dot2(p-vec2(0.25,0.75))) - sqrt(2.0)/4.0;
+      return sqrt(min(dot2(p-vec2(0.00,1.00)),
+                      dot2(p-0.5*max(p.x+p.y,0.0)))) * sign(p.x-p.y);
+  }
 
   float sdfCircle(vec2 p, float r){
     return length(p) -r;
@@ -61,27 +73,42 @@ export const slider_fragmentShaderSource = `#version 300 es
   void main() {
     vec2 pixelCoord = (uv * 0.5 + 0.5) * iResolution;
     vec2 position = pixelCoord / iResolution.y;
-
-    float dist = sdBox(position - vec2(iResolution.x / iResolution.y * 0.5, 0.05), vec2(iResolution.x / iResolution.y * 0.45, 0.01));
+    float aspect = iResolution.x / iResolution.y;
+    float dist = sdBox(position - vec2(iResolution.x / iResolution.y * 0.5, 0.05), vec2(iResolution.x / iResolution.y * 0.45, 0.005));
     // draw slider bar
+
     if (dist <0.0){
-      fragColor = vec4(-uv.x, uv.y, 0.0, 1.0);
-    } else{
+      fragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    } else if(dist < 0.002) {
+      fragColor = vec4(0.2, 0.2, 0.2, 0.9);
+    }
+    else{
       fragColor = vec4(0.0, 0.0, 0.0, 0.0);
     }
-    // todo, find a way to have the circle have an input that goes from 0 to 1, and its restricted to the same positions as the rectangle
-    // float ball = sdfCircle(position-vec2(iResolution.x / iResolution.y *0.5 , 0.05), 0.02);
-    //0.2*iResolution.x / iResolution.y
+
     vec2 leftMargin = vec2(0.05*iResolution.x/iResolution.y,0.05);
     vec2 rightMargin = vec2(iResolution.x / iResolution.y - 0.05*iResolution.x/iResolution.y,0.05);
 
 
     // im a genius
-    float ball = sdfCircle(position-seekCirclePosition(leftMargin,rightMargin,uSeekProgress), 0.02);
+    float ball = sdfCircle(position-seekCirclePosition(leftMargin,rightMargin,uSeekProgress), 0.015);
 
     if (ball <0.0){
-      fragColor = vec4(1.0, uv.y, 0.0, 1.0);
-    } else{
+      fragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    } else if (ball < 0.004){
+      fragColor = vec4(0.0, 0.0, 0.0, 0.7);
+
+    }
+
+
+    float heartSizePx = 50.0;
+    vec2 heartCenterPx = vec2(iResolution.x*0.925, 80 ); // anchor near bottom-right, in pixels
+
+    vec2 heartPos = (pixelCoord - heartCenterPx) / heartSizePx;
+
+    float heart = sdHeart(heartPos);
+    if (heart < 0.0) {
+      fragColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
 
   }

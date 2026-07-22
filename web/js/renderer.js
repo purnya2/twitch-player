@@ -66,7 +66,6 @@ export class Renderer {
     const is2D = node.is2D || false;
     const projMatrix = is2D ? this.orthoProjectionMatrix : this.projectionMatrix;
     const viewMatrix = is2D ? this.identityViewMatrix : this.viewMatrix;
-
     glMatrix.mat4.multiply(mvpMatrix, projMatrix, viewMatrix);
     glMatrix.mat4.multiply(mvpMatrix, mvpMatrix, worldMatrix);
 
@@ -111,6 +110,20 @@ export class Renderer {
         gl.uniform2f(iResolutionLocation, this.iResolution[0], this.iResolution[1]);
     }
 
+    if (node.texture) {
+      if (!node.textureUniformLocation) {
+        node.textureUniformLocation =  gl.getUniformLocation(node.program, 'uTexture');
+      }
+
+      gl.activeTexture(gl.TEXTURE0);
+
+      gl.bindTexture(gl.TEXTURE2D, node.texture);
+
+      gl.uniform1i(node.textureUniformLocation, 0);
+    }
+
+
+
       /*const modelLocation = gl.getUniformLocation(this.program, "uModelMatrix");
       if (modelLocation !== null && modelLocation !== -1) {
         gl.uniformMatrix4fv(modelLocation, false, worldMatrix);
@@ -130,6 +143,7 @@ export class Renderer {
     const bottom = -1;
     const top = 1;
     glMatrix.mat4.ortho(this.orthoProjectionMatrix, left, right, bottom, top, -1, 1);
+
   }
   setIResolution(resolution) {
       this.iResolution = resolution;

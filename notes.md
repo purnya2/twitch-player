@@ -29,3 +29,6 @@ if I am deciding to implement the mediator pattern that means that I have to mak
 - MusicServer.rs
 - GraphicsServer.rs
   - I really hate myself so i decided to make the graphics server in webGL
+
+
+2. welp, welp! i managed to make a barebones view in web, now i just gotta figure out how to push this shit!
