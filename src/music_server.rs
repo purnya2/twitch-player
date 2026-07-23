@@ -1,27 +1,12 @@
 use std::sync::Arc;
-use std::{convert::Infallible, time::Duration};
+use std::time::Duration;
 
-use axum::extract::State;
-use axum::{
-    Router,
-    response::sse::{Event, Sse},
-    routing::get,
-    serve::Listener,
-};
-use axum_extra::TypedHeader;
 use dotenvy::dotenv;
-use futures_util::stream::{self, Stream};
 use opensubsonic::{Auth, Client};
-use rand::seq::SliceRandom;
 use rodio::source::Source;
-use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
-use serde_json::json;
+use rodio::{Decoder, DeviceSinkBuilder, Player};
 use std::io::Cursor;
-use std::io::Sink;
-use std::{default, env};
-use tokio::sync::{Mutex, broadcast, mpsc};
-use tokio_stream::{StreamExt as _, wrappers::ReceiverStream}; // Correct import
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tokio::sync::{Mutex, mpsc};
 
 use crate::MusicAuth; // Use mpsc instead of broadcast // Add this import
 
@@ -62,7 +47,14 @@ impl MusicServer {
     }
 
     pub async fn run(&self) {
-        self.client.ping().await.unwrap();
+        match self.client.ping().await {
+            Ok(response) => {
+                // Handle success
+            }
+            Err(e) => {
+                panic!("Failed to connect to music server: {}", e);
+            }
+        }
         println!("Connected to music server! :D");
 
         let playlist_id = "BOoaoyKinoDvFomNE7iMHB";
@@ -168,6 +160,9 @@ impl MusicServer {
 impl MusicEventReceiver {
     pub fn try_recv(&mut self) -> Result<MusicEvent, mpsc::error::TryRecvError> {
         self.event_rx.try_recv()
+    }
+    pub async fn recv(&mut self) -> Option<MusicEvent> {
+        self.event_rx.recv().await
     }
 }
 

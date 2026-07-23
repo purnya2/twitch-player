@@ -1,10 +1,17 @@
+use std::sync::Arc;
+use tokio::io::{self, AsyncBufReadExt, AsyncReadExt, BufReader};
+
 use crate::twitch_bot::{TwitchBot, TwitchCommand};
 use axum::response::sse::Event;
 use headers::Server;
 use serde_json::json;
-use tokio::io::{self, AsyncReadExt};
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
+use wgpu::PolygonMode::Line;
 use winit::event;
+
+use crossterm::event::{EventStream, KeyCode, KeyEventKind};
+use crossterm::terminal;
+use futures_util::StreamExt;
 
 use crate::music_server::MusicCommand;
 use crate::{AppDatabase, MusicAuth, TwitchAuth};
@@ -15,15 +22,13 @@ use crate::{
 };
 
 pub struct Mediator {
-    music_event_receiver: MusicEventReceiver,
-    music_command_sender: MusicCommandSender,
+    music_event_receiver: Option<MusicEventReceiver>,
+    music_command_sender: Option<MusicCommandSender>,
     music_handle: Option<tokio::task::JoinHandle<()>>,
-
-    // the graphic server thingies, these are useful for running AND interacting with the interface
-    graphic_sender: GraphicServerSender, // this is quite curious ! I need to separate the graphic server into server and sender in order to be able to send data without having ownership problems, this is much cleaner...
+    graphic_sender: Option<GraphicServerSender>,
     graphic_handle: Option<tokio::task::JoinHandle<()>>,
-    twitch_event_receiver: TwitchEventReceiver,
-    twitch_command_sender: TwitchCommandSender,
+    twitch_event_receiver: Option<TwitchEventReceiver>,
+    twitch_command_sender: Option<TwitchCommandSender>,
     twitch_bot_handle: Option<tokio::task::JoinHandle<()>>,
     app_database: AppDatabase,
 }
@@ -41,14 +46,15 @@ impl Mediator {
         let music_handle = tokio::spawn(async move { music_server.run().await });
         let graphic_handle = tokio::spawn(async move { graphic_server.run().await });
         let twitch_bot_handle = tokio::spawn(async move { twitch_bot.run().await });
+
         Self {
-            music_event_receiver,
-            music_command_sender,
+            music_event_receiver: Some(music_event_receiver),
+            music_command_sender: Some(music_command_sender),
             music_handle: Some(music_handle),
-            graphic_sender,
+            graphic_sender: Some(graphic_sender),
             graphic_handle: Some(graphic_handle),
-            twitch_event_receiver,
-            twitch_command_sender,
+            twitch_event_receiver: Some(twitch_event_receiver),
+            twitch_command_sender: Some(twitch_command_sender),
             twitch_bot_handle: Some(twitch_bot_handle),
             app_database,
         }
@@ -56,10 +62,6 @@ impl Mediator {
 
     pub async fn run(&mut self) {
         // here i run every single server after they are all set up well and finely!
-        let db_m = self.app_database.connection.clone();
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
-
-        const MAX_EVENTS_PER_BATCH: usize = 10;
 
         let mut track_info = ServerEvent::UpdateTrack {
             track_name: "blank".to_string(),
@@ -68,82 +70,162 @@ impl Mediator {
             track_length_millis: 0,
             cover_art_url: "blank".to_string(),
         };
-        let mut currently_playing_track_id = "".to_owned();
-        let mut last_playing_track_id = "".to_owned();
+        let currently_playing_track_id = Arc::new(Mutex::new("".to_owned()));
+        let last_playing_track_id = Arc::new(Mutex::new("".to_owned()));
 
-        // hereby i will send to the graphic server UpdateSeekBar server events with the seekbar pos pingponging between 0 and 1
-        let mut stdin = io::stdin();
-        let mut buf = [0u8; 1];
-        loop {
-            let mut processed = 0;
-            // some bullshit that checks if i send some commands in stdin, this is... horrible to say the least
-            match tokio::time::timeout(tokio::time::Duration::from_millis(0), stdin.read(&mut buf))
-                .await
-            {
-                Ok(Ok(1)) => {
-                    let c = buf[0] as char;
-                    if c == 's' {
-                        self.music_command_sender.try_send(MusicCommand::Skip);
-                    }
-                    if c == 'p' {
-                        self.music_command_sender.try_send(MusicCommand::Toggle);
-                    }
-                    if c == 'q' {
-                        println!("Quitting...");
-                        break;
-                    }
-                }
-                _ => {}
-            }
+        let mut music_command_sender = self.music_command_sender.take().unwrap();
+        let mut music_event_receiver = self.music_event_receiver.take().unwrap();
+        let mut twitch_command_sender = self.twitch_command_sender.take().unwrap();
+        let mut twitch_event_receiver = self.twitch_event_receiver.take().unwrap();
 
-            // Twitch Bot
-            match self.twitch_event_receiver.try_recv() {
-                Ok(event) => match event {
-                    twitch_bot::TwitchEvent::LikeTrack { privmsg } => {
-                        let user_id = privmsg.sender.id.clone();
-                        let track_id = currently_playing_track_id.clone();
-                        let exists: i64 =
-                            self.app_database.get_likes_count(track_id.as_str()).await;
+        let graphic_sender = self.graphic_sender.take().unwrap();
 
-                        if exists == 0 {
-                            self.app_database
-                                .add_like(track_id.as_str(), user_id.as_str())
-                                .await;
-                            println!("User {} liked track {}", user_id, track_id);
-                            let _ = self.twitch_command_sender.try_send(
-                                TwitchCommand::SendMessageReply {
-                                    privmsg,
-                                    msg: "[BOT] liked!".to_owned(),
-                                },
-                            );
-                            self.send_likes_update(track_id.clone(), false).await;
-                        } else {
-                            println!("User {} already liked track {}", user_id, track_id);
-                            let _ = self.twitch_command_sender.try_send(
-                                TwitchCommand::SendMessageReply {
-                                    privmsg,
-                                    msg: "[BOT] you already liked that!".to_owned(),
-                                },
-                            );
+        tokio::join!(
+            async {
+                /*let mut reader = EventStream::new();
+                terminal::enable_raw_mode().ok();
+
+                while let Some(Ok(event)) = reader.next().await {
+                    if let crossterm::event::Event::Key(key_event) = event {
+                        if key_event.kind == KeyEventKind::Press {
+                            match key_event.code {
+                                KeyCode::Char('s') => {
+                                    let _ = music_command_sender.try_send(MusicCommand::Skip);
+                                }
+                                KeyCode::Char('p') => {
+                                    let _ = music_command_sender.try_send(MusicCommand::Toggle);
+                                }
+                                KeyCode::Char('q') => {
+                                    println!("\r\nQuitting...");
+                                    break;
+                                }
+                                _ => {}
+                            }
                         }
                     }
-                },
-                Err(_) => {}
-            }
+                }*/
+                //would be cool to have the terminal raw mode thing
+                let mut lines = BufReader::new(io::stdin()).lines();
 
-            // Music server
-            loop {
-                if processed > MAX_EVENTS_PER_BATCH {
-                    break;
+                while let Ok(Some(line)) = lines.next_line().await {
+                    match line.trim() {
+                        "s" => {
+                            let _ = music_command_sender.try_send(MusicCommand::Skip);
+                        }
+                        "p" => {
+                            let _ = music_command_sender.try_send(MusicCommand::Toggle);
+                        }
+                        "q" => {
+                            println!("Quitting...");
+                            break;
+                        }
+                        _ => {}
+                    }
                 }
+            },
+            async {
+                let cptid_clone = currently_playing_track_id.clone();
+                while let Some(event) = twitch_event_receiver.recv().await {
+                    match event {
+                        twitch_bot::TwitchEvent::LikeTrack { privmsg } => {
+                            let user_id = privmsg.sender.id.clone();
+                            let track_id = {
+                                let guard = cptid_clone.lock().await;
+                                guard.clone()
+                            };
+                            /*
+                            let exists: i64 =
+                                self.app_database.get_likes_count(track_id.as_str()).await;
 
-                match self.music_event_receiver.try_recv() {
-                    Ok(music_event) => {
+                            if exists == 0 {
+                                self.app_database
+                                    .add_like(track_id.as_str(), user_id.as_str())
+                                    .await;
+                                println!("User {} liked track {}", user_id, track_id);
+                                let _ = twitch_command_sender.try_send(
+                                    TwitchCommand::SendMessageReply {
+                                        privmsg,
+                                        msg: "[BOT] liked!".to_owned(),
+                                    },
+                                );
+                                let amount: i64 =
+                                    self.app_database.get_likes_count(track_id.as_str()).await;
+                                println!("send likes update!!!! : {}", amount);
+                                let update_likes = ServerEvent::UpdateLikes {
+                                    amount,
+                                    new_like: false,
+                                };
+                                let _ = graphic_sender.send_event(update_likes.to_sse_event());
+                            } else {
+                                println!("User {} already liked track {}", user_id, track_id);
+                                let _ = twitch_command_sender.try_send(
+                                    TwitchCommand::SendMessageReply {
+                                        privmsg,
+                                        msg: "[BOT] you already liked that!".to_owned(),
+                                    },
+                                );
+                            }*/
+
+                            match self
+                                .app_database
+                                .add_like(track_id.as_str(), user_id.as_str())
+                                .await
+                            {
+                                Ok(true) => {
+                                    let _ = twitch_command_sender.try_send(
+                                        TwitchCommand::SendMessageReply {
+                                            privmsg,
+                                            msg: "[BOT] liked".to_owned(),
+                                        },
+                                    );
+                                    let amount: i64 =
+                                        self.app_database.get_likes_count(track_id.as_str()).await;
+                                    println!("send likes update!!!! : {}", amount);
+                                    let update_likes = ServerEvent::UpdateLikes {
+                                        amount,
+                                        new_like: false,
+                                    };
+                                    let _ = graphic_sender.send_event(update_likes.to_sse_event());
+                                }
+                                Ok(false) => {
+                                    let _ = twitch_command_sender.try_send(
+                                        TwitchCommand::SendMessageReply {
+                                            privmsg,
+                                            msg: "[BOT] you already liked that!".to_owned(),
+                                        },
+                                    );
+                                }
+
+                                Err(e) => {
+                                    let _ = twitch_command_sender.try_send(
+                                        TwitchCommand::SendMessageReply {
+                                            privmsg,
+                                            msg: "[BOT] error adding like!".to_owned(),
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            async {
+                let cptid_clone = currently_playing_track_id.clone();
+                let lptid_clone = last_playing_track_id.clone();
+
+                loop {
+                    while let Some(music_event) = music_event_receiver.recv().await {
                         match music_event {
                             music_server::MusicEvent::TrackProgress {
                                 track_length_millis,
                                 time_elapsed_millis,
-                            } => self.send_seekbar_update(track_length_millis, time_elapsed_millis),
+                            } => {
+                                let update_seekbar = ServerEvent::UpdateSeekBar {
+                                    track_length_millis: track_length_millis,
+                                    time_elapsed_millis: time_elapsed_millis,
+                                };
+                                let _ = graphic_sender.send_event(update_seekbar.to_sse_event());
+                            }
                             music_server::MusicEvent::TrackInfo {
                                 track_id,
                                 name,
@@ -152,7 +234,7 @@ impl Mediator {
                                 cover_art_url,
                                 track_length_millis,
                             } => {
-                                currently_playing_track_id = track_id;
+                                *currently_playing_track_id.lock().await = track_id;
                                 track_info = ServerEvent::UpdateTrack {
                                     track_name: name,
                                     album_name,
@@ -162,42 +244,34 @@ impl Mediator {
                                 };
                             }
                         }
-                        processed += 1;
+
+                        // TODO make this cleaner!
+                        let cptid_guard = cptid_clone.lock().await;
+                        let lptid_guard = lptid_clone.lock().await;
+                        if *cptid_guard != *lptid_guard {
+                            drop(cptid_guard);
+                            drop(lptid_guard);
+
+                            // bestiaccia
+                            let mut last_guard = lptid_clone.lock().await;
+                            *last_guard = cptid_clone.lock().await.clone();
+                            drop(last_guard);
+
+                            let current_id = cptid_clone.lock().await.clone();
+                            let amount: i64 =
+                                self.app_database.get_likes_count(current_id.as_str()).await;
+                            println!("send likes update!!!! : {}", amount);
+                            let update_likes = ServerEvent::UpdateLikes {
+                                amount,
+                                new_like: false,
+                            };
+                            let _ = graphic_sender.send_event(update_likes.to_sse_event());
+                        }
+                        let _ = graphic_sender.send_event(track_info.to_sse_event());
                     }
-                    Err(mpsc::error::TryRecvError::Empty) => break,
-                    Err(mpsc::error::TryRecvError::Disconnected) => return,
-                }
-
-                if currently_playing_track_id != last_playing_track_id {
-                    last_playing_track_id = currently_playing_track_id.clone();
-
-                    self.send_likes_update(currently_playing_track_id.clone(), false)
-                        .await;
                 }
             }
-            let _ = self.graphic_sender.send_event(track_info.to_sse_event());
-
-            // mhh little doubt, is it a good idea to do this lol, to send so often the track info..? TODO
-            interval.tick().await;
-        }
-    }
-
-    async fn send_likes_update(&mut self, track_id: String, new_like: bool) {
-        let amount: i64 = self.app_database.get_likes_count(track_id.as_str()).await;
-        println!("send likes update!!!! : {}", amount);
-
-        let update_likes = ServerEvent::UpdateLikes { amount, new_like };
-        let _ = self.graphic_sender.send_event(update_likes.to_sse_event());
-    }
-
-    fn send_seekbar_update(&mut self, track_length_millis: u128, time_elapsed_millis: u128) {
-        let update_seekbar = ServerEvent::UpdateSeekBar {
-            track_length_millis: track_length_millis,
-            time_elapsed_millis: time_elapsed_millis,
-        };
-        let _ = self
-            .graphic_sender
-            .send_event(update_seekbar.to_sse_event());
+        );
     }
 }
 

@@ -206,25 +206,36 @@ impl AppDatabase {
     async fn add_like(&self, track_id: &str, user_id: &str) -> Result<bool, sqlite::Error> {
         let conn = self.connection.lock().await;
         // Check if exists
+        println!(
+            "add_like called with: track='{}', user='{}'",
+            track_id, user_id
+        );
         let check = "SELECT COUNT(*) FROM LIKES WHERE track = ? AND user = ?";
         let mut stmt = conn.prepare(check).unwrap();
         stmt.bind((1, track_id)).unwrap();
         stmt.bind((2, user_id)).unwrap();
 
         let exists: i64 = match stmt.next().unwrap() {
-            sqlite::State::Row => stmt.read::<i64, _>(0).unwrap(),
+            sqlite::State::Row => {
+                let count = stmt.read::<i64, _>(0).unwrap();
+                count
+            }
             sqlite::State::Done => 0,
         };
 
         if exists > 0 {
+            println!("❌ Like already exists (count={}), returning false", exists);
             return Ok(false); // Already liked
         }
 
         let insert = "INSERT INTO LIKES (track, user) VALUES (?, ?)";
+
         let mut stmt = conn.prepare(insert).unwrap();
         stmt.bind((1, track_id)).unwrap();
         stmt.bind((2, user_id)).unwrap();
+
         stmt.next().unwrap();
+
         Ok(true)
     }
 }

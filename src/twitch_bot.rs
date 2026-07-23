@@ -126,6 +126,9 @@ impl TwitchEventReceiver {
     pub fn try_recv(&mut self) -> Result<TwitchEvent, mpsc::error::TryRecvError> {
         self.event_rx.try_recv()
     }
+    pub async fn recv(&mut self) -> Option<TwitchEvent> {
+        self.event_rx.recv().await
+    }
 }
 
 impl TwitchCommandSender {
