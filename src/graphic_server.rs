@@ -8,6 +8,7 @@ use axum::{
 use axum_extra::TypedHeader;
 use futures_util::stream::Stream;
 use tokio::sync::broadcast;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::{services::ServeDir, trace::TraceLayer};
 /* keeping this, because i dont know if in the future i'll need to have a more complex AppState
 #[derive(Clone)]
@@ -42,10 +43,16 @@ impl GraphicServer {
 
         let addr = "127.0.0.1:3000".to_owned();
 
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+
         let app: Router = Router::new()
             .route("/sse", axum::routing::get(sse_handler))
             .fallback_service(ServeDir::new("./web").append_index_html_on_directories(true))
             .layer(TraceLayer::new_for_http())
+            .layer(cors)
             .with_state(self.clone());
         // TODO this should be configurable kek
         let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

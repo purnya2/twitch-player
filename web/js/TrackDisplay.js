@@ -98,7 +98,4 @@ export class TrackDisplay{
     this.ctx.fillText(likes, this.canvas.width * 0.925, this.canvas.height - 105);
     this.ctx.textAlign = "left";
   }
-
-
-
 }

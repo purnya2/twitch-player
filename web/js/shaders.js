@@ -10,8 +10,9 @@ export const vertexShaderSource = `#version 300 es
     float id = float(gl_VertexID+1);
     float turbx = (sin(id*uTime)/100.0)*turbolence_influence;
     float turby = (cos(id*uTime)/100.0)*turbolence_influence;
+    float floatingy = 0.0*(sin(uTime/4.0)/100.0);
 
-    gl_Position = uMVP * vec4(aPos, 0.0, 1.0)+vec4(turbx,turby,0.0,0.0);
+    gl_Position = uMVP * vec4(aPos, 0.0, 1.0)+vec4(turbx,turby+floatingy,0.0,0.0);
     vTexCoord = vec2(aTexCoord.x,-aTexCoord.y);
 
   }
@@ -45,6 +46,8 @@ export const slider_fragmentShaderSource = `#version 300 es
   uniform vec2 iResolution;
   uniform float uSeekProgress;
   uniform float uHeartAnim;
+  uniform float uTime;
+
 
   float threshold = 5.0;
   float dot2(vec2 v) {
@@ -78,27 +81,45 @@ export const slider_fragmentShaderSource = `#version 300 es
   }
 
   void main() {
+
+
+
     vec2 pixelCoord = (uv * 0.5 + 0.5) * iResolution;
     vec2 position = pixelCoord / iResolution.y;
     float aspect = iResolution.x / iResolution.y;
-    float dist = sdBox(position - vec2(iResolution.x / iResolution.y * 0.5, 0.05), vec2(iResolution.x / iResolution.y * 0.45, 0.005));
-    // draw slider bar
 
-    if (dist <0.0){
+
+    vec2 leftMargin = vec2(0.05*iResolution.x/iResolution.y,0.05);
+    vec2 rightMargin = vec2(iResolution.x / iResolution.y - 0.05*iResolution.x/iResolution.y,0.05);
+
+    vec2 circle_position = seekCirclePosition(leftMargin,rightMargin,uSeekProgress);
+    float y_offset = 0.0;
+
+    // the sinewave before the circle
+    if(position.x < circle_position.x){
+      y_offset = sin(pixelCoord.x/7.0 - uTime/1.0)/250.0;
+
+    }
+
+    vec2 box_pos = position - vec2(iResolution.x / iResolution.y * 0.5, 0.05) + vec2(0.0,y_offset);
+
+    float dist = sdBox(box_pos, vec2(iResolution.x / iResolution.y * 0.45, 0.005));
+
+    // draw slider bar
+    if (dist < -0.003){
       fragColor = vec4(1.0, 1.0, 1.0, 1.0);
-    } else if(dist < 0.002) {
-      fragColor = vec4(0.2, 0.2, 0.2, 0.9);
+    } else if(dist < 0.000) {
+      fragColor = vec4(0.0, 0.0, 0.0, 0.9);
     }
     else{
       fragColor = vec4(0.0, 0.0, 0.0, 0.0);
     }
 
-    vec2 leftMargin = vec2(0.05*iResolution.x/iResolution.y,0.05);
-    vec2 rightMargin = vec2(iResolution.x / iResolution.y - 0.05*iResolution.x/iResolution.y,0.05);
+
 
 
     // im a genius
-    float ball = sdfCircle(position-seekCirclePosition(leftMargin,rightMargin,uSeekProgress), 0.015);
+    float ball = sdfCircle(position-circle_position, 0.015);
 
     if (ball <0.0){
       fragColor = vec4(1.0, 1.0, 1.0, 1.0);
@@ -112,7 +133,6 @@ export const slider_fragmentShaderSource = `#version 300 es
     vec2 heartCenterPx = vec2(iResolution.x*0.925, 80 ); // anchor near bottom-right, in pixels
 
     vec2 heartPos = (pixelCoord - heartCenterPx) / heartSizePx;
-
     float heart = sdHeart(heartPos);
     if (heart < 0.0 + uHeartAnim/2.0) {
       fragColor = vec4(1.0, 1.0-uHeartAnim, 1.0-uHeartAnim, 1.0);

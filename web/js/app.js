@@ -27,7 +27,7 @@ export class App {
     this.offsetTextScroll = 0.0
 
     this.i = 0.0 //todo do i need u?
-    this.sseHandler = new SSEHandler('/sse', this.OnMessage)
+    this.sseHandler = new SSEHandler('http://localhost:3000/sse', this.OnMessage)
     this.track_data = null;
     this.likes = 0;
   }
@@ -99,7 +99,9 @@ export class App {
     ]);
     slider.uniforms = [
       { name: 'uSeekProgress', program: slider.program, value: 0.0 },
-      { name: 'uHeartAnim', program: slider.program, value: 0.0 }
+      { name: 'uHeartAnim', program: slider.program, value: 0.0 },
+      { name: 'uTime', program: slider.program, value: 0.0 }
+
     ]
 
     /*slider.setPosition(0, 0, 0);
@@ -190,10 +192,13 @@ export class App {
 
     this.heartAnim = this.heartAnim || 0.0;
     this.heartAnim = lerp(this.heartAnim, 0.0, 0.1);
+
     this.slider.uniforms[1].value = this.heartAnim;
+    this.slider.uniforms[2].value = this.time;
+
     if (this.heartAnim <= 0.01){
       //console.log("pump");
-      //this.heartAnim = 0.1;
+      //this.heartAnim = 1.0;
     }
 
   }
@@ -212,7 +217,7 @@ export class App {
         this.gl.deleteTexture(oldTexture);
       }
 
-      this.turbolence = 10.0;
+      this.turbolence = -10.0;
     }
   }
   updateAlbumPositionAndScale(albumScalePixel) {
