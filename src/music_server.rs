@@ -19,6 +19,7 @@ pub struct MusicCommandSender {
 }
 
 pub struct MusicServer {
+    api_url: String,
     client: Client,
     event_tx: mpsc::Sender<MusicEvent>,
     command_rx: Arc<Mutex<mpsc::Receiver<MusicCommand>>>,
@@ -37,6 +38,7 @@ impl MusicServer {
         let password = music_auth.password;
         let client_res = Client::new(&api_url, Auth::token(&username, &password));
         let music_server = Self {
+            api_url,
             client: client_res.unwrap(),
             event_tx,
             command_rx: Arc::new(Mutex::new(command_rx)),
@@ -48,14 +50,13 @@ impl MusicServer {
 
     pub async fn run(&self) {
         match self.client.ping().await {
-            Ok(response) => {
-                // Handle success
+            Ok(_response) => {
+                println!("Connected to music server on : {}", self.api_url);
             }
             Err(e) => {
                 panic!("Failed to connect to music server: {}", e);
             }
         }
-        println!("Connected to music server! :D");
 
         let playlist_id = "BOoaoyKinoDvFomNE7iMHB";
         let mut playlist = self.client.get_playlist(playlist_id).await.unwrap();
@@ -172,6 +173,12 @@ impl MusicCommandSender {
         command: MusicCommand,
     ) -> Result<(), mpsc::error::TrySendError<MusicCommand>> {
         self.command_tx.try_send(command)
+    }
+    pub async fn send(
+        &mut self,
+        command: MusicCommand,
+    ) -> Result<(), mpsc::error::SendError<MusicCommand>> {
+        self.command_tx.send(command).await
     }
 }
 

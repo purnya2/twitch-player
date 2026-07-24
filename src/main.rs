@@ -3,14 +3,11 @@ use dotenvy::dotenv;
 use sqlite::{Connection, State};
 use std::fmt::Debug;
 use std::{env, sync::Arc};
-use twitch_irc::login::{
-    RefreshingLoginCredentials, StaticLoginCredentials, TokenStorage, UserAccessToken,
-};
-use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
+use twitch_irc::login::{TokenStorage, UserAccessToken};
 
 use crate::mediator::Mediator;
 use crate::twitch_bot::TwitchAuth;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 mod graphic_server;
 mod mediator;
 mod music_server;
@@ -20,7 +17,8 @@ mod twitch_bot;
 async fn main() {
     dotenv().ok();
 
-    let mut app_database = AppDatabase::new("data.db");
+    let mut app_database =
+        AppDatabase::new("data.db").expect("CRITICAL ERROR : Failed to initialize database");
     app_database.check_token().await;
 
     let music_auth = MusicAuth {
@@ -58,7 +56,7 @@ impl Clone for AppDatabase {
 }
 
 impl AppDatabase {
-    pub fn new<T>(path: T) -> Self
+    pub fn new<T>(path: T) -> Result<Self, sqlite::Error>
     where
         T: AsRef<std::path::Path>,
     {
@@ -99,15 +97,15 @@ impl AppDatabase {
 
             );";
 
-            connection.execute(settings_table_query);
-            connection.execute(tracks_table_query);
-            connection.execute(users_table_query);
-            connection.execute(likes_table_query);
+            connection.execute(settings_table_query)?;
+            connection.execute(tracks_table_query)?;
+            connection.execute(users_table_query)?;
+            connection.execute(likes_table_query)?;
         }
 
-        Self {
+        Ok(Self {
             connection: Arc::new(tokio::sync::Mutex::new(connection)),
-        }
+        })
     }
 
     async fn get_first_token(&self) -> Result<UserAccessToken, TokenError> {
@@ -174,16 +172,15 @@ impl AppDatabase {
 
     pub async fn check_token(&mut self) {
         let res = self.load_token().await;
-        println!("are we loaded?");
 
         match res {
             Err(TokenError::NoTokenFound) => {
-                println!("but was the error no token found?");
                 let token_res = self.get_first_token().await;
                 match token_res {
                     Ok(token) => {
-                        println!("are we updooting?");
-                        self.update_token(&token).await;
+                        self.update_token(&token)
+                            .await
+                            .expect("CRITICAL ERROR : token update as failed");
                     }
                     Err(_) => todo!(),
                 }
@@ -282,7 +279,6 @@ impl TokenStorage for AppDatabase {
 
                 let token: UserAccessToken = serde_json::from_str(&token_json)
                     .map_err(|e| TokenError::SerializationError(e))?;
-                println!("the token is okay");
                 Ok(token)
             }
             Ok(State::Done) => Err(TokenError::NoTokenFound),

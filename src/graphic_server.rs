@@ -4,20 +4,18 @@ use axum::extract::State;
 use axum::{
     Router,
     response::sse::{Event, Sse},
-    routing::get,
-    serve::Listener,
 };
 use axum_extra::TypedHeader;
-use futures_util::stream::{self, Stream};
-use serde_json::json;
-use tokio::sync::{broadcast, mpsc};
-use tokio_stream::{StreamExt as _, wrappers::ReceiverStream}; // Correct import
-use tower_http::{services::ServeDir, trace::TraceLayer}; // Use mpsc instead of broadcast // Add this import
+use futures_util::stream::Stream;
+use tokio::sync::broadcast;
+use tower_http::{services::ServeDir, trace::TraceLayer};
+/* keeping this, because i dont know if in the future i'll need to have a more complex AppState
 #[derive(Clone)]
 pub struct AppState {
     event_tx: broadcast::Sender<Event>,
-}
+}*/
 
+#[derive(Clone)]
 pub struct GraphicServer {
     event_tx: broadcast::Sender<Event>,
 }
@@ -38,26 +36,24 @@ impl GraphicServer {
     }
 
     pub async fn run(&self) {
-        let state = AppState {
+        /*let state = AppState {
             event_tx: self.event_tx.clone(),
-        };
+        };*/
+
+        let addr = "127.0.0.1:3000".to_owned();
 
         let app: Router = Router::new()
             .route("/sse", axum::routing::get(sse_handler))
             .fallback_service(ServeDir::new("./web").append_index_html_on_directories(true))
             .layer(TraceLayer::new_for_http())
-            .with_state(state);
+            .with_state(self.clone());
         // TODO this should be configurable kek
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-            .await
-            .unwrap();
+        let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+        println!("\nServing browser view on : {}", addr);
+        println!("in OBS, create a Browser component and paste this url!");
+        println!("http://{}\n", addr);
 
         axum::serve(listener, app).await.unwrap();
-    }
-    pub fn sender(&self) -> GraphicServerSender {
-        GraphicServerSender {
-            event_tx: self.event_tx.clone(),
-        }
     }
 }
 
@@ -69,9 +65,12 @@ impl GraphicServerSender {
 }
 async fn sse_handler(
     TypedHeader(user_agent): TypedHeader<headers::UserAgent>,
-    State(state): State<AppState>,
+    State(state): State<GraphicServer>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    println!("`{}` connected", user_agent.as_str());
+    println!(
+        "`{}` has connected to the SSE endpoint",
+        user_agent.as_str()
+    );
 
     let mut rx = state.event_tx.subscribe();
     let stream = async_stream::stream! {

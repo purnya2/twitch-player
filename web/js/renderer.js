@@ -131,7 +131,14 @@ export class Renderer {
 
     const vao = node.mesh.vao;
     gl.bindVertexArray(vao);
-    gl.drawArrays(gl.TRIANGLES, 0, node.mesh.vertexCount);
+
+    if (node.mesh.hasIndices) {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, node.mesh.indexBuffer);
+        gl.drawElements(gl.TRIANGLES, node.mesh.indexCount, gl.UNSIGNED_SHORT, 0);
+    } else {
+        gl.drawArrays(gl.TRIANGLES, 0, node.mesh.vertexCount);
+    }
+
     gl.bindVertexArray(null);
   }
 

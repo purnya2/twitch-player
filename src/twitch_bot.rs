@@ -7,6 +7,12 @@ use twitch_irc::login::{RefreshingLoginCredentials, TokenStorage, UserAccessToke
 use twitch_irc::message::{PrivmsgMessage, ServerMessage};
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 
+macro_rules! send {
+    ($tx:expr, $event:expr) => {
+        let _ = $tx.send($event).await;
+    };
+}
+
 use crate::AppDatabase;
 
 pub struct TwitchAuth {
@@ -67,7 +73,7 @@ impl TwitchBot {
     pub async fn run(mut self) {
         let channel = self.channel.clone();
         match self.client.join(channel.clone()) {
-            Ok(()) => println!("Successfully joined #{}", channel),
+            Ok(()) => println!("Successfully joined on twitch channel : #{}", channel),
             Err(e) => {
                 println!("❌ Failed to join #{}: {:?}", channel, e);
                 // Try to see if we're getting any messages
@@ -84,15 +90,31 @@ impl TwitchBot {
             while let Some(message) = self.message_receiver.recv().await {
                 //println!("Received message: {:?}", message);
                 match message {
-                    ServerMessage::Privmsg(privmsg) => {
-                        if privmsg.message_text == "!like" {
-                            // This replies directly to the user who sent the command
-                            /*self.client
-                            .say_in_reply_to(&privmsg, "[BOT] BZZT".to_owned())
-                            .await;*/
-                            event_tx.send(TwitchEvent::LikeTrack { privmsg }).await;
+                    ServerMessage::Privmsg(privmsg) => match privmsg.message_text.as_str() {
+                        "!like" => {
+                            send!(event_tx, TwitchEvent::LikeTrack { privmsg });
                         }
-                    }
+                        "!piastrato" => {
+                            let username = privmsg.sender.name.clone();
+                            let msg = format!("[BOT] {} e' stato piastrato!", username);
+
+                            send!(event_tx, TwitchEvent::reply(privmsg, msg));
+                        }
+                        "non lo voglio piastrato" => {
+                            send!(
+                                event_tx,
+                                TwitchEvent::reply(
+                                    privmsg,
+                                    "[BOT] eh mah che po tegwadatacologodog wapa go"
+                                )
+                            );
+                        }
+                        "!aaa" => {
+                            send!(event_tx, TwitchEvent::message("[BOT] AAAAAAAAAAAA"));
+                        }
+
+                        _ => {}
+                    },
                     _ => {}
                 }
             }
@@ -138,10 +160,26 @@ impl TwitchCommandSender {
     ) -> Result<(), mpsc::error::TrySendError<TwitchCommand>> {
         self.command_tx.try_send(command)
     }
+
+    pub async fn send(
+        &mut self,
+        command: TwitchCommand,
+    ) -> Result<(), mpsc::error::SendError<TwitchCommand>> {
+        self.command_tx.send(command).await
+    }
 }
 
 pub enum TwitchEvent {
-    LikeTrack { privmsg: PrivmsgMessage },
+    LikeTrack {
+        privmsg: PrivmsgMessage,
+    },
+    SendMessage {
+        msg: String,
+    },
+    SendMessageReply {
+        privmsg: PrivmsgMessage,
+        msg: String,
+    },
 }
 
 pub enum TwitchCommand {
@@ -152,4 +190,21 @@ pub enum TwitchCommand {
         privmsg: PrivmsgMessage,
         msg: String,
     },
+}
+
+impl TwitchEvent {
+    fn reply(privmsg: PrivmsgMessage, msg: impl Into<String>) -> Self {
+        TwitchEvent::SendMessageReply {
+            privmsg,
+            msg: msg.into(),
+        }
+    }
+
+    fn message(msg: impl Into<String>) -> Self {
+        TwitchEvent::SendMessage { msg: msg.into() }
+    }
+
+    fn like(privmsg: PrivmsgMessage) -> Self {
+        TwitchEvent::LikeTrack { privmsg }
+    }
 }

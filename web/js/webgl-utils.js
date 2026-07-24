@@ -22,7 +22,7 @@ export function createProgram(gl, vertexShader, fragmentShader) {
   return program;
 }
 
-export function createBufferInfo(gl, vertices, attributes) {
+export function createBufferInfo(gl, vertices, attributes,indices = null) {
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
 
@@ -43,10 +43,24 @@ export function createBufferInfo(gl, vertices, attributes) {
     );
   }
 
+  let indexBuffer = null;
+  let indexCount = 0;
+  if (indices) {
+    indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    indexCount = indices.length;
+  }
   gl.bindVertexArray(null);
   const totalComponents = attributes.reduce((sum, attr) => sum + attr.components, 0);
   const vertexCount = vertices.length / totalComponents;
-  return { vao, vertexCount };
+  return {
+    vao,
+    vertexCount,
+    indexBuffer,
+    indexCount,
+    hasIndices: !!indices
+  };
 }
 // createTexture loads image asynchronously
 export function createTexture(gl, url, fallbackColor = [0, 0, 0, 0]) {

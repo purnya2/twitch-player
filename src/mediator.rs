@@ -1,17 +1,11 @@
 use std::sync::Arc;
-use tokio::io::{self, AsyncBufReadExt, AsyncReadExt, BufReader};
+use tokio::io::BufReader;
+use tokio::io::{self, AsyncBufReadExt};
 
 use crate::twitch_bot::{TwitchBot, TwitchCommand};
 use axum::response::sse::Event;
-use headers::Server;
 use serde_json::json;
 use tokio::sync::{Mutex, mpsc};
-use wgpu::PolygonMode::Line;
-use winit::event;
-
-use crossterm::event::{EventStream, KeyCode, KeyEventKind};
-use crossterm::terminal;
-use futures_util::StreamExt;
 
 use crate::music_server::MusicCommand;
 use crate::{AppDatabase, MusicAuth, TwitchAuth};
@@ -110,14 +104,17 @@ impl Mediator {
                 while let Ok(Some(line)) = lines.next_line().await {
                     match line.trim() {
                         "s" => {
+                            println!("skipping song...");
                             let _ = music_command_sender.try_send(MusicCommand::Skip);
                         }
                         "p" => {
+                            println!("toggled pause/play!");
+
                             let _ = music_command_sender.try_send(MusicCommand::Toggle);
                         }
                         "q" => {
                             println!("Quitting...");
-                            break;
+                            panic!("TODO : handle a decent exit man!");
                         }
                         _ => {}
                     }
@@ -133,38 +130,6 @@ impl Mediator {
                                 let guard = cptid_clone.lock().await;
                                 guard.clone()
                             };
-                            /*
-                            let exists: i64 =
-                                self.app_database.get_likes_count(track_id.as_str()).await;
-
-                            if exists == 0 {
-                                self.app_database
-                                    .add_like(track_id.as_str(), user_id.as_str())
-                                    .await;
-                                println!("User {} liked track {}", user_id, track_id);
-                                let _ = twitch_command_sender.try_send(
-                                    TwitchCommand::SendMessageReply {
-                                        privmsg,
-                                        msg: "[BOT] liked!".to_owned(),
-                                    },
-                                );
-                                let amount: i64 =
-                                    self.app_database.get_likes_count(track_id.as_str()).await;
-                                println!("send likes update!!!! : {}", amount);
-                                let update_likes = ServerEvent::UpdateLikes {
-                                    amount,
-                                    new_like: false,
-                                };
-                                let _ = graphic_sender.send_event(update_likes.to_sse_event());
-                            } else {
-                                println!("User {} already liked track {}", user_id, track_id);
-                                let _ = twitch_command_sender.try_send(
-                                    TwitchCommand::SendMessageReply {
-                                        privmsg,
-                                        msg: "[BOT] you already liked that!".to_owned(),
-                                    },
-                                );
-                            }*/
 
                             match self
                                 .app_database
@@ -180,10 +145,9 @@ impl Mediator {
                                     );
                                     let amount: i64 =
                                         self.app_database.get_likes_count(track_id.as_str()).await;
-                                    println!("send likes update!!!! : {}", amount);
                                     let update_likes = ServerEvent::UpdateLikes {
                                         amount,
-                                        new_like: false,
+                                        new_like: true,
                                     };
                                     let _ = graphic_sender.send_event(update_likes.to_sse_event());
                                 }
@@ -204,6 +168,22 @@ impl Mediator {
                                         },
                                     );
                                 }
+                            }
+                        }
+                        twitch_bot::TwitchEvent::SendMessage { msg } => {
+                            if let Err(e) = twitch_command_sender
+                                .send(TwitchCommand::SendMessage { msg })
+                                .await
+                            {
+                                eprintln!("Failed to send Twitch message: {}", e);
+                            }
+                        }
+                        twitch_bot::TwitchEvent::SendMessageReply { privmsg, msg } => {
+                            if let Err(e) = twitch_command_sender
+                                .send(TwitchCommand::SendMessageReply { privmsg, msg })
+                                .await
+                            {
+                                eprintln!("Failed to send Twitch reply message : {}", e);
                             }
                         }
                     }
@@ -260,7 +240,6 @@ impl Mediator {
                             let current_id = cptid_clone.lock().await.clone();
                             let amount: i64 =
                                 self.app_database.get_likes_count(current_id.as_str()).await;
-                            println!("send likes update!!!! : {}", amount);
                             let update_likes = ServerEvent::UpdateLikes {
                                 amount,
                                 new_like: false,

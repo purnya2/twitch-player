@@ -1,13 +1,19 @@
 export const vertexShaderSource = `#version 300 es
   in vec2 aPos;
   in vec2 aTexCoord;
-  uniform float uRotation;
+  uniform float uTime;
+  uniform float turbolence_influence;
   uniform mat4 uMVP;
   out vec2 vTexCoord;
 
   void main() {
-    gl_Position = uMVP * vec4(aPos, 0.0, 1.0);
+    float id = float(gl_VertexID+1);
+    float turbx = (sin(id*uTime)/100.0)*turbolence_influence;
+    float turby = (cos(id*uTime)/100.0)*turbolence_influence;
+
+    gl_Position = uMVP * vec4(aPos, 0.0, 1.0)+vec4(turbx,turby,0.0,0.0);
     vTexCoord = vec2(aTexCoord.x,-aTexCoord.y);
+
   }
 `;
 
@@ -38,6 +44,7 @@ export const slider_fragmentShaderSource = `#version 300 es
   in vec2 uv;
   uniform vec2 iResolution;
   uniform float uSeekProgress;
+  uniform float uHeartAnim;
 
   float threshold = 5.0;
   float dot2(vec2 v) {
@@ -107,8 +114,10 @@ export const slider_fragmentShaderSource = `#version 300 es
     vec2 heartPos = (pixelCoord - heartCenterPx) / heartSizePx;
 
     float heart = sdHeart(heartPos);
-    if (heart < 0.0) {
-      fragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    if (heart < 0.0 + uHeartAnim/2.0) {
+      fragColor = vec4(1.0, 1.0-uHeartAnim, 1.0-uHeartAnim, 1.0);
+    } else if(heart < 0.05){
+      fragColor = vec4(0.0, 0.0, 0.0, 1.0);
     }
 
   }
