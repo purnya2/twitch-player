@@ -24,6 +24,7 @@ pub struct TwitchEventReceiver {
     event_rx: mpsc::Receiver<TwitchEvent>,
 }
 
+#[derive(Clone)]
 pub struct TwitchCommandSender {
     command_tx: mpsc::Sender<TwitchCommand>,
 }
@@ -81,7 +82,7 @@ impl TwitchBot {
             }
         }
         self.client
-            .say(channel.clone(), "[BOT] ahoy! Im the bot!".to_owned())
+            .say(channel.clone(), "[ °□°]/!! ahoy! Im the bot!".to_owned())
             .await
             .unwrap();
         let event_tx = self.event_tx.clone();
@@ -96,7 +97,7 @@ impl TwitchBot {
                         }
                         "!piastrato" => {
                             let username = privmsg.sender.name.clone();
-                            let msg = format!("[BOT] {} e' stato piastrato!", username);
+                            let msg = format!("[ °□°]/!! {} e' stato piastrato!", username);
 
                             send!(event_tx, TwitchEvent::reply(privmsg, msg));
                         }
@@ -105,12 +106,12 @@ impl TwitchBot {
                                 event_tx,
                                 TwitchEvent::reply(
                                     privmsg,
-                                    "[BOT] eh mah che po tegwadatacologodog wapa go"
+                                    "[ °□°]/!! eh mah che po tegwadatacologodog wapa go"
                                 )
                             );
                         }
                         "!aaa" => {
-                            send!(event_tx, TwitchEvent::message("[BOT] AAAAAAAAAAAA"));
+                            send!(event_tx, TwitchEvent::message("[ °□°]/!! AAAAAAAAAAAA"));
                         }
 
                         _ => {}

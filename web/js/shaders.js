@@ -97,7 +97,7 @@ export const slider_fragmentShaderSource = `#version 300 es
 
     // the sinewave before the circle
     if(position.x < circle_position.x){
-      y_offset = sin(pixelCoord.x/7.0 - uTime/1.0)/250.0;
+      y_offset = (sin(pixelCoord.x/7.0 - uTime/1.0)/250.0);
 
     }
 
@@ -136,7 +136,7 @@ export const slider_fragmentShaderSource = `#version 300 es
     float heart = sdHeart(heartPos);
     if (heart < 0.0 + uHeartAnim/2.0) {
       fragColor = vec4(1.0, 1.0-uHeartAnim, 1.0-uHeartAnim, 1.0);
-    } else if(heart < 0.05){
+    } else if(heart < 0.05+((sin(uTime/2.0)+1.0)/2.0/30.0)){
       fragColor = vec4(0.0, 0.0, 0.0, 1.0);
     }
 

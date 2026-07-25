@@ -58,7 +58,7 @@ impl MusicServer {
             }
         }
 
-        let playlist_id = "BOoaoyKinoDvFomNE7iMHB";
+        let playlist_id = "yvklFeYXJENdeZ2WPJGXai";
         let mut playlist = self.client.get_playlist(playlist_id).await.unwrap();
         let stream_handle = DeviceSinkBuilder::open_default_sink().unwrap();
 
@@ -97,17 +97,24 @@ impl MusicServer {
 
                 let update_track_event = MusicEvent::TrackInfo {
                     track_id: track_id.clone(),
-                    name: track.title,
-                    album_name: track.album.unwrap(),
-                    artist_name: track.artist.unwrap(),
+                    name: track.title.clone(),
+                    album_name: track.album.clone().unwrap(),
+                    artist_name: track.artist.clone().unwrap(),
                     cover_art_url: cover_art_url.unwrap(),
                     track_length_millis: track_length_millis,
                 };
-
+                let now_playing = MusicEvent::NowPlaying {
+                    track_name: track.title,
+                    album_name: track.album.unwrap(),
+                    artist_name: track.artist.unwrap(),
+                };
+                let _ = event_tx.send(now_playing).await;
                 let _ = event_tx.send(update_track_event).await;
+
                 let command_rx = self.command_rx.clone();
 
                 let player = Player::connect_new(stream_handle.mixer());
+
                 player.append(source);
 
                 let _ = tokio::spawn(async move {
@@ -183,6 +190,11 @@ impl MusicCommandSender {
 }
 
 pub enum MusicEvent {
+    NowPlaying {
+        track_name: String,
+        album_name: String,
+        artist_name: String,
+    },
     TrackProgress {
         track_length_millis: u128,
         time_elapsed_millis: u128,

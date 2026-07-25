@@ -2,7 +2,7 @@ export class TrackDisplay{
   constructor(ctx, canvas) {
     this.ctx = ctx;
     this.canvas = canvas;
-    this.font = "48px '0xProto Nerd Font', serif";
+    this.font = "40px '0xProto Nerd Font', serif";
     this.scrollOffset = 0;
     this.isScrolling = false;
   }
@@ -25,9 +25,10 @@ export class TrackDisplay{
     this.ctx.lineWidth = 5;
     this.ctx.strokeStyle = "#000000";
     this.ctx.fillStyle = "#FFFFFF";
-
-    if (name.length > 13) {
+    if (name.length > 20) {
+      this.ctx.letterSpacing = '-3px';
       this.renderScrollingText(name, x, y);
+      this.ctx.letterSpacing = '0px';
     } else {
       this.ctx.strokeText(name, x, y);
       this.ctx.fillText(name, x, y);
@@ -35,10 +36,11 @@ export class TrackDisplay{
   }
 
   renderScrollingText(name, x, y) {
-     const text = `${name} `.repeat(3);
+    const baseText = `${name}  --  `;
+     const text = baseText.repeat(3);
      this.scrollOffset -= 1;
 
-     const textWidth = this.ctx.measureText(`${name} `).width;
+     const textWidth = this.ctx.measureText(baseText).width;
      if (this.scrollOffset <= -textWidth) this.scrollOffset = 0;
 
      this.ctx.strokeText(text, x + this.scrollOffset, y);
@@ -52,8 +54,8 @@ export class TrackDisplay{
     const gradient = this.ctx.createLinearGradient(x, 0, this.canvas.width, 0);
     gradient.addColorStop(0, "rgba(255, 255, 255, 1.0)");
     gradient.addColorStop(0.01, "rgba(255, 255, 255, 0.0)");
-    gradient.addColorStop(0.4, "rgba(255, 255, 255, 0.0)");
-    gradient.addColorStop(0.5, "rgba(255, 255, 255, 1.0)");
+    gradient.addColorStop(0.7, "rgba(255, 255, 255, 0.0)");
+    gradient.addColorStop(0.8, "rgba(255, 255, 255, 1.0)");
     gradient.addColorStop(1, "rgba(255, 255, 255, 1.0)");
     this.ctx.globalCompositeOperation = "destination-out";
     this.ctx.fillStyle = gradient;

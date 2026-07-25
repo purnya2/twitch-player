@@ -69,8 +69,10 @@ impl Mediator {
 
         let mut music_command_sender = self.music_command_sender.take().unwrap();
         let mut music_event_receiver = self.music_event_receiver.take().unwrap();
-        let mut twitch_command_sender = self.twitch_command_sender.take().unwrap();
         let mut twitch_event_receiver = self.twitch_event_receiver.take().unwrap();
+
+        let mut twitch_command_sender = self.twitch_command_sender.take().unwrap();
+        let mut twitch_command_sender_from_server = twitch_command_sender.clone();
 
         let graphic_sender = self.graphic_sender.take().unwrap();
 
@@ -140,7 +142,7 @@ impl Mediator {
                                     let _ = twitch_command_sender.try_send(
                                         TwitchCommand::SendMessageReply {
                                             privmsg,
-                                            msg: "[BOT] liked".to_owned(),
+                                            msg: "[ °□°]/!! liked".to_owned(),
                                         },
                                     );
                                     let amount: i64 =
@@ -155,7 +157,7 @@ impl Mediator {
                                     let _ = twitch_command_sender.try_send(
                                         TwitchCommand::SendMessageReply {
                                             privmsg,
-                                            msg: "[BOT] you already liked that!".to_owned(),
+                                            msg: "[ °□°]/!! you already liked that!".to_owned(),
                                         },
                                     );
                                 }
@@ -164,7 +166,7 @@ impl Mediator {
                                     let _ = twitch_command_sender.try_send(
                                         TwitchCommand::SendMessageReply {
                                             privmsg,
-                                            msg: "[BOT] error adding like!".to_owned(),
+                                            msg: "[ °□°]/!! error adding like!".to_owned(),
                                         },
                                     );
                                 }
@@ -222,6 +224,18 @@ impl Mediator {
                                     track_length_millis,
                                     cover_art_url,
                                 };
+                            }
+                            music_server::MusicEvent::NowPlaying {
+                                track_name,
+                                album_name,
+                                artist_name,
+                            } => {
+                                let msg = format!(
+                                    "♪┌|^□^|┘♪ Now playing: {} by {} ({})",
+                                    track_name, artist_name, album_name,
+                                );
+                                twitch_command_sender_from_server
+                                    .try_send(TwitchCommand::SendMessage { msg });
                             }
                         }
 
